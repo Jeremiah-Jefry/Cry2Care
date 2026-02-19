@@ -83,18 +83,22 @@ function useSim() {
   const [rec, setRec] = useState(false);
   const [result, setResult] = useState(null);
 
+  const [selectedFile, setSelectedFile] = useState(null);
+
   const runAnalysis = async (audioFile) => {
-    setAnalyzing(true); 
+    const fileToProcess = audioFile || selectedFile;
+    if (!fileToProcess) {
+      setResult({ error: "Please select a WAV file first", cause: "NO INPUT" });
+      return;
+    }
+
+    setAnalyzing(true);
+    setResult(null);
     setProgress(10);
-    
+
     try {
       const formData = new FormData();
-      if (audioFile) {
-        formData.append('file', audioFile);
-      } else {
-        // Fallback or mock if no file provided
-        throw new Error("No audio source provided");
-      }
+      formData.append('file', fileToProcess);
 
       const response = await fetch(`${API_BASE_URL}/predict`, {
         method: 'POST',
@@ -107,13 +111,13 @@ function useSim() {
       setResult(data);
     } catch (error) {
       console.error("Prediction error:", error);
-      setResult({ error: "Connection Failed", cause: "UNKNOWN" });
+      setResult({ error: "Backend Connection Failed. Ensure Flask is running on port 5000.", cause: "OFFLINE" });
     } finally {
       setTimeout(() => setAnalyzing(false), 500);
     }
   };
 
-  return { analyzing, progress, runAnalysis, rec, setRec, result };
+  return { analyzing, progress, runAnalysis, rec, setRec, result, selectedFile, setSelectedFile };
 }
 
 /* ════════════════  VIEWS  ════════════════ */
@@ -204,7 +208,7 @@ function MonitorView() {
 
 /* ── 2. DIAGNOSTIC ENGINE ── */
 function AnalysisView() {
-  const { analyzing, progress, runAnalysis, rec, setRec } = useSim();
+  const { analyzing, progress, runAnalysis, rec, setRec, result, selectedFile, setSelectedFile } = useSim();
 
   return (
     <div className="grid grid-cols-12 gap-6 h-full">
@@ -219,31 +223,37 @@ function AnalysisView() {
               <div className={`p-2 rounded-full ${rec ? "bg-red-200" : "bg-gray-200"}`}><Mic size={20} /></div>
               <span className="text-xs font-bold uppercase">{rec ? "Stop Recording" : "Start Mic"}</span>
             </button>
-            <label className="h-24 rounded border bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer">
-              <div className="p-2 rounded-full bg-gray-200"><Upload size={20} /></div>
-              <span className="text-xs font-bold uppercase text-gray-600">Upload WAV</span>
-              <input 
-                type="file" 
-                accept=".wav" 
-                className="hidden" 
+            <label className={`h-24 rounded border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${selectedFile ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300"}`}>
+              <div className={`p-2 rounded-full ${selectedFile ? "bg-emerald-200" : "bg-gray-200"}`}><Upload size={20} /></div>
+              <span className="text-xs font-bold uppercase">{selectedFile ? "File Loaded" : "Upload WAV"}</span>
+              <input
+                type="file"
+                accept=".wav"
+                className="hidden"
                 onChange={(e) => {
-                  if(e.target.files[0]) runAnalysis(e.target.files[0]);
-                }} 
+                  if (e.target.files[0]) setSelectedFile(e.target.files[0]);
+                }}
               />
             </label>
           </div>
 
+          {selectedFile && (
+            <div className="mb-4 p-2 bg-slate-50 border border-slate-200 rounded text-[10px] font-mono truncate text-gray-500">
+              FILE: {selectedFile.name}
+            </div>
+          )}
+
           <div className="bg-slate-50 border border-slate-100 p-3 rounded mb-4">
-            <div className="flex justify-between text-xs mb-1"><span className="text-gray-500">Signal Quality</span><span className="font-bold text-emerald-600">Optimal (98%)</span></div>
-            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className="h-full w-[98%] bg-emerald-500" /></div>
+            <div className="flex justify-between text-xs mb-1"><span className="text-gray-500">System Ready</span><span className="font-bold text-emerald-600">ONLINE</span></div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className="h-full w-full bg-emerald-500" /></div>
           </div>
 
           <button
             onClick={() => runAnalysis()}
-            disabled={true}
-            className={`w-full py-3 rounded font-bold uppercase tracking-wide text-sm shadow-sm transition-all bg-gray-100 text-gray-400`}
+            disabled={analyzing || !selectedFile}
+            className={`w-full py-3 rounded font-bold uppercase tracking-wide text-sm shadow-sm transition-all ${analyzing ? "bg-gray-100 text-gray-400" : (selectedFile ? "bg-sky-700 text-white hover:bg-sky-800" : "bg-gray-100 text-gray-400 cursor-not-allowed")}`}
           >
-            Automatic Monitoring Active
+            {analyzing ? `Processing... ${progress}%` : "Run Diagnostic Sequence"}
           </button>
         </Card>
 

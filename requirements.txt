@@ -8,3 +8,4 @@ joblib
 librosa
 numpy
 werkzeug
+scikit-learn

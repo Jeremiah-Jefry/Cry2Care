@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from config import config
@@ -11,8 +11,12 @@ def create_app(config_name='default'):
     
     # Initialize extensions
     db.init_app(app)
-    CORS(app)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     
+    @app.route('/')
+    def root():
+        return redirect('/api/')
+
     # Register blueprints
     from .api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')

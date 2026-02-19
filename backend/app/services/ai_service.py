@@ -19,21 +19,29 @@ class AIService:
         """Load models only once (Singleton pattern)."""
         if self.model is None:
             model_dir = current_app.config['MODEL_PATH']
+            print(f"DEBUG: AIService loading models from {model_dir}")
             
             model_path = os.path.join(model_dir, 'cry_model.pkl')
             label_encoder_path = os.path.join(model_dir, 'label_encoder.pkl')
             anomaly_model_path = os.path.join(model_dir, 'cry_anomaly_model.joblib')
 
             if os.path.exists(model_path):
+                print(f"DEBUG: Loading {model_path}")
                 self.model = joblib.load(model_path)
+            else:
+                print(f"DEBUG: ERROR - {model_path} NOT FOUND")
             
             if os.path.exists(label_encoder_path):
+                print(f"DEBUG: Loading {label_encoder_path}")
                 self.label_encoder = joblib.load(label_encoder_path)
+            else:
+                print(f"DEBUG: ERROR - {label_encoder_path} NOT FOUND")
                 
             if os.path.exists(anomaly_model_path):
+                print(f"DEBUG: Loading {anomaly_model_path}")
                 self.anomaly_model = joblib.load(anomaly_model_path)
             
-            print(f"Models loaded from {model_dir}")
+            print(f"DEBUG: Models loaded status: Model={self.model is not None}, Encoder={self.label_encoder is not None}")
 
     def predict(self, audio_file_path):
         """Extract features and predict cause."""
