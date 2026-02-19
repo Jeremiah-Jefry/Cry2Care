@@ -10,7 +10,6 @@
 -   ** AI Classification Engine**: Real-time identification of cry causes (Hunger, Pain, Discomfort, etc.) using MFCC-based neural mapping.
 -   ** Vital Signal Analytics**: Deep tracking of RMS Power, Zero-Crossing Rate (ZCR), and Spectral Centroids for objective distress assessment.
 -   ** Protocol-Driven Notifications**: A high-severity alert system that bounces critical events to the dashboard immediately.
--   ** Dusk Protocol UI**: A "Soft-Dark" user interface designed for 24/7 monitoring without eye strain, featuring high-end Glassmorphism.
 -   ** Real-time Visualization**: Dynamic acoustic timelines and classification splits powered by Recharts and Framer Motion.
 
 ---
