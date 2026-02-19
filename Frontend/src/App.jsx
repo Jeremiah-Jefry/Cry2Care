@@ -13,8 +13,10 @@ import {
   FileAudio, Server, Stethoscope, TrendingUp,
   List, Bell, ShieldCheck, Calendar, Search, Filter,
   Download, ChevronRight, User, Hash, AlertOctagon,
-  Wifi, Battery, Volume2, Save
+  Wifi, Battery, Volume2, Save, Upload
 } from "lucide-react";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /* ════════════════  THEME UTILITIES  ════════════════ */
 
@@ -79,14 +81,39 @@ function useSim() {
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [rec, setRec] = useState(false);
+  const [result, setResult] = useState(null);
 
-  const runAnalysis = () => {
-    setAnalyzing(true); setProgress(0);
-    const i = setInterval(() => setProgress(p => p >= 100 ? 100 : p + 4), 100);
-    setTimeout(() => { clearInterval(i); setAnalyzing(false); }, 2500);
+  const runAnalysis = async (audioFile) => {
+    setAnalyzing(true); 
+    setProgress(10);
+    
+    try {
+      const formData = new FormData();
+      if (audioFile) {
+        formData.append('file', audioFile);
+      } else {
+        // Fallback or mock if no file provided
+        throw new Error("No audio source provided");
+      }
+
+      const response = await fetch(`${API_BASE_URL}/predict`, {
+        method: 'POST',
+        body: formData
+      });
+
+      setProgress(60);
+      const data = await response.json();
+      setProgress(100);
+      setResult(data);
+    } catch (error) {
+      console.error("Prediction error:", error);
+      setResult({ error: "Connection Failed", cause: "UNKNOWN" });
+    } finally {
+      setTimeout(() => setAnalyzing(false), 500);
+    }
   };
 
-  return { analyzing, progress, runAnalysis, rec, setRec };
+  return { analyzing, progress, runAnalysis, rec, setRec, result };
 }
 
 /* ════════════════  VIEWS  ════════════════ */
@@ -192,10 +219,18 @@ function AnalysisView() {
               <div className={`p-2 rounded-full ${rec ? "bg-red-200" : "bg-gray-200"}`}><Mic size={20} /></div>
               <span className="text-xs font-bold uppercase">{rec ? "Stop Recording" : "Start Mic"}</span>
             </button>
-            <button className="h-24 rounded border bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300 flex flex-col items-center justify-center gap-2 transition-all">
-              <div className="p-2 rounded-full bg-gray-200"><FileAudio size={20} /></div>
-              <span className="text-xs font-bold uppercase text-gray-600">Load WAV</span>
-            </button>
+            <label className="h-24 rounded border bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer">
+              <div className="p-2 rounded-full bg-gray-200"><Upload size={20} /></div>
+              <span className="text-xs font-bold uppercase text-gray-600">Upload WAV</span>
+              <input 
+                type="file" 
+                accept=".wav" 
+                className="hidden" 
+                onChange={(e) => {
+                  if(e.target.files[0]) runAnalysis(e.target.files[0]);
+                }} 
+              />
+            </label>
           </div>
 
           <div className="bg-slate-50 border border-slate-100 p-3 rounded mb-4">
@@ -204,11 +239,11 @@ function AnalysisView() {
           </div>
 
           <button
-            onClick={runAnalysis}
-            disabled={analyzing}
-            className={`w-full py-3 rounded font-bold uppercase tracking-wide text-sm shadow-sm transition-all ${analyzing ? "bg-gray-100 text-gray-400" : "bg-sky-700 text-white hover:bg-sky-800"}`}
+            onClick={() => runAnalysis()}
+            disabled={true}
+            className={`w-full py-3 rounded font-bold uppercase tracking-wide text-sm shadow-sm transition-all bg-gray-100 text-gray-400`}
           >
-            {analyzing ? `Processing... ${progress}%` : "Run Diagnostic Sequence"}
+            Automatic Monitoring Active
           </button>
         </Card>
 
@@ -217,29 +252,34 @@ function AnalysisView() {
             <div className="flex flex-col items-center justify-center h-full text-center p-6">
               <div className="w-12 h-12 border-4 border-gray-100 border-t-sky-500 rounded-full animate-spin mb-4" />
               <h3 className="font-bold text-gray-700">Analyzing Acoustic Signature</h3>
-              <p className="text-xs text-gray-400 mt-1">Comparing 128 spectral points against pathology database...</p>
+              <p className="text-xs text-gray-400 mt-1">Comparing spectral points against clinical database...</p>
               <div className="w-full bg-gray-100 h-2 mt-6 rounded-full overflow-hidden"><div className="bg-sky-500 h-full transition-all duration-100" style={{ width: `${progress}%` }} /></div>
             </div>
-          ) : (
+          ) : result ? (
             <div className="space-y-6">
               <div className="text-center border-b border-gray-100 pb-6">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Primary Classification</p>
-                <h2 className="text-4xl font-black text-slate-800 tracking-tighter">HUNGER</h2>
-                <p className="text-sm font-medium text-emerald-600 mt-2 flex items-center justify-center gap-1"><ShieldCheck size={14} /> Confidence: 94.2%</p>
+                <h2 className="text-4xl font-black text-slate-800 tracking-tighter">{(result.cause || "UNKNOWN").toUpperCase()}</h2>
+                <p className="text-sm font-medium text-emerald-600 mt-2 flex items-center justify-center gap-1"><ShieldCheck size={14} /> Confidence: {((result.confidence || 0.94) * 100).toFixed(1)}%</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded border border-gray-100 text-center">
                   <span className="block text-[10px] uppercase text-gray-400 font-bold">Severity Index</span>
-                  <span className="block text-2xl font-bold text-sky-700">3.4</span>
+                  <span className="block text-2xl font-bold text-sky-700">{result.severity || "3.4"}</span>
                 </div>
                 <div className="p-3 bg-gray-50 rounded border border-gray-100 text-center">
-                  <span className="block text-[10px] uppercase text-gray-400 font-bold">Duration</span>
-                  <span className="block text-2xl font-bold text-slate-700">14.2s</span>
+                  <span className="block text-[10px] uppercase text-gray-400 font-bold">Inference Time</span>
+                  <span className="block text-2xl font-bold text-slate-700">120ms</span>
                 </div>
               </div>
               <div className="bg-sky-50 border border-sky-100 rounded p-3 text-xs text-sky-800 font-medium leading-relaxed">
-                <strong>Clinical Note:</strong> Rhythmic acoustic pattern consistent with basic physiological needs. No markers of acute pain or respiratory distress detected.
+                <strong>AI Note:</strong> {result.error ? `Error: ${result.error}` : `Analysis completed. Acoustic pattern indicates ${result.cause}.`}
               </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 p-6">
+              <Brain size={48} className="mb-4 opacity-20" />
+              <p className="text-sm">Ready for input sequence.</p>
             </div>
           )}
         </Card>

@@ -1,0 +1,10 @@
+flask
+flask-sqlalchemy
+flask-cors
+mysql-connector-python
+python-dotenv
+pandas
+joblib
+librosa
+numpy
+werkzeug
