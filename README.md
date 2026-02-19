@@ -1,7 +1,5 @@
 # Cry2Care Clinical Suite v3.0
 
-[![Industrial Design](https://img.shields.io/badge/Design-Industrial%20Grade-blueviolet?style=for-the-badge)](https://github.com/Jeremiah-Jefry/Cry2Care)
-[![AI Driven](https://img.shields.io/badge/AI-Signal%20Processing-teal?style=for-the-badge)](https://github.com/Jeremiah-Jefry/Cry2Care)
 
 **Cry2Care** is a premium, hospital-grade acoustic monitoring system designed for neonatal and pediatric care. By utilizing advanced signal processing and machine learning, it identifies the causation of infant distress (crying) with precision, providing clinical staff with real-time severity alerts and diagnostic metadata.
 
