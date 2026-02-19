@@ -1,55 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Inter:wght@100..900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-medical-50: #f0f9ff;
-  --color-medical-100: #e0f2fe;
-  --color-medical-600: #0284c7;
-  /* Sky-600 - Clean Clinical Blue */
-  --color-medical-700: #0369a1;
-  /* Sky-700 - Darker Authority Blue */
-  --color-medical-900: #0c4a6e;
-  /* Navy */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Nunito", sans-serif;
+
+  --color-baby-blue: #E0F7FA;
+  --color-baby-pink: #FCE4EC;
+  --color-soft-navy: #263238;
+  --color-glass: rgba(255, 255, 255, 0.6);
 }
 
-/* ════════════════════  CLINICAL BASE  ════════════════════ */
+/* ════════════════════  INDUSTRIAL GRADE UI  ════════════════════ */
 
 body {
   font-family: var(--font-sans);
-  background-color: #f3f4f6;
-  /* Gray-100 */
-  color: #111827;
-  /* Gray-900 */
+  background: radial-gradient(circle at top left, #f8fbff, var(--color-baby-blue), #ffffff);
+  background-attachment: fixed;
+  color: var(--color-soft-navy);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-/* ════════════════════  UTILITIES  ════════════════════ */
-.scroll-hide::-webkit-scrollbar {
-  display: none;
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
 }
 
-.card-shadow {
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+/* ════════════════════  GLASSMORPHISM  ════════════════════ */
+
+.glass-panel {
+  background: var(--color-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
 }
 
-/* Recording Pulse */
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+.glass-card {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.7);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.1);
+}
+
+/* ════════════════════  ANIMATIONS  ════════════════════ */
+
+@keyframes breath {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
   }
 
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+.animate-breath {
+  animation: breath 4s ease-in-out infinite;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
   }
 
   100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    transform: scale(2.5);
+    opacity: 0;
   }
 }
 
-.record-pulse {
-  animation: pulse-ring 2s infinite;
+.animate-ripple {
+  position: relative;
+}
+
+.animate-ripple::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ripple 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Audio Wave Simulation */
+.wave-bar {
+  animation: wave-bounce 1s ease-in-out infinite;
+}
+
+@keyframes wave-bounce {
+
+  0%,
+  100% {
+    height: 20%;
+  }
+
+  50% {
+    height: 80%;
+  }
+}
+
+/* ════════════════════  COMPONENTS  ════════════════════ */
+
+.btn-primary {
+  @apply bg-soft-navy text-white px-6 py-2.5 rounded-full font-bold tracking-wide hover:bg-soft-navy/90 transition-all active:scale-95 shadow-lg;
+}
+
+.nav-item-active {
+  @apply bg-white/50 text-soft-navy shadow-sm;
 }
