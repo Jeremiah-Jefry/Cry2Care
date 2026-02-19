@@ -1,6 +1,8 @@
 import os
 from flask import request, jsonify
 from . import api_bp
+from ..extensions import db
+from ..models import CryRecord
 from ..services.ai_service import ai_service
 from werkzeug.utils import secure_filename
 
@@ -47,16 +49,34 @@ def predict():
         try:
             print("DEBUG: Calling ai_service.predict")
             result = ai_service.predict(file_path)
+            
+            if result.get("status") == "success":
+                # Save to Database
+                record = CryRecord(
+                    cause=result["cause"],
+                    confidence=result["confidence"],
+                    severity=result["severity"],
+                    rms=result["vitals"]["rms"],
+                    zcr=result["vitals"]["zcr"],
+                    spectral_centroid=result["vitals"]["sc"],
+                    file_path=file_path
+                )
+                db.session.add(record)
+                db.session.commit()
+                result["id"] = f"EVT-{record.id:03d}"
+                print(f"DEBUG: Saved record {record.id} to DB")
+
             print(f"DEBUG: Prediction result: {result}")
             return jsonify(result)
         except Exception as e:
+            db.session.rollback()
             print(f"DEBUG: Exception during prediction: {str(e)}")
             return jsonify({"error": str(e), "status": "error"}), 500
 
 @api_bp.route('/logs', methods=['GET'])
 def get_logs():
-    # Mock logs for now, will connect to DB in Phase 3
-    return jsonify([
-        {"id": "EVT-001", "time": "10:00:00", "type": "Analysis", "desc": "Hunger detected", "sev": "Normal"},
-        {"id": "EVT-002", "time": "10:15:00", "type": "Alert", "desc": "High distress", "sev": "High"}
-    ])
+    try:
+        records = CryRecord.query.order_by(CryRecord.timestamp.desc()).limit(50).all()
+        return jsonify([r.to_dict() for r in records])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

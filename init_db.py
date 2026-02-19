@@ -43,7 +43,10 @@ def init_database():
                 file_path VARCHAR(255),
                 cause VARCHAR(100),
                 severity FLOAT,
-                confidence FLOAT
+                confidence FLOAT,
+                rms FLOAT,
+                zcr FLOAT,
+                spectral_centroid FLOAT
             )
         """)
         

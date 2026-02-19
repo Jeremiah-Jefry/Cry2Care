@@ -17,7 +17,7 @@ def main():
     try:
         subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
     except subprocess.CalledProcessError:
-        print("❌ Dependency installation failed. Please check your internet connection.")
+        print("Dependency installation failed. Please check your internet connection.")
         return
 
     # 2. Initialize Database
@@ -34,25 +34,25 @@ def main():
     if os.path.exists("frontend/node_modules"):
         frontend_proc = run_command("npm run dev", cwd="frontend")
     else:
-        print("⚠️ node_modules not found, installing...")
+        print(" node_modules not found, installing...")
         subprocess.run(["npm", "install"], cwd="frontend", shell=True)
         frontend_proc = run_command("npm run dev", cwd="frontend")
     
-    print("\n" + "✨" * 20)
+  
     print("  SYSTEM READY & OPERATIONAL")
     print("  DASHBOARD: http://localhost:5173")
     print("  API HUB:   http://localhost:5000/api")
-    print("✨" * 20 + "\n")
+
     print("Monitoring services... (Press Ctrl+C to stop everything)\n")
     
     try:
         while True:
             # Check if processes are still running
             if backend_proc.poll() is not None:
-                print("🛑 Backend process died! Restarting or exiting...")
+                print("Backend process died! Restarting or exiting...")
                 break
             if frontend_proc.poll() is not None:
-                print("🛑 Frontend process died! Restarting or exiting...")
+                print("Frontend process died! Restarting or exiting...")
                 break
             time.sleep(2)
     except KeyboardInterrupt:
@@ -60,7 +60,7 @@ def main():
     finally:
         backend_proc.terminate()
         frontend_proc.terminate()
-        print("👋 Goodbye.")
+        print(" Goodbye.")
 
 if __name__ == "__main__":
     main()

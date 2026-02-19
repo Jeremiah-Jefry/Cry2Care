@@ -82,8 +82,32 @@ function useSim() {
   const [progress, setProgress] = useState(0);
   const [rec, setRec] = useState(false);
   const [result, setResult] = useState(null);
-
   const [selectedFile, setSelectedFile] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/logs`);
+      const data = await response.json();
+      // DEFENSIVE: Ensure data is an array before setting state
+      if (Array.isArray(data)) {
+        setHistory(data);
+      } else {
+        console.warn("API returned non-array history:", data);
+        setHistory([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch history:", err);
+      setHistory([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const runAnalysis = async (audioFile) => {
     const fileToProcess = audioFile || selectedFile;
@@ -109,6 +133,7 @@ function useSim() {
       const data = await response.json();
       setProgress(100);
       setResult(data);
+      fetchHistory(); // Refresh history after prediction
     } catch (error) {
       console.error("Prediction error:", error);
       setResult({ error: "Backend Connection Failed. Ensure Flask is running on port 5000.", cause: "OFFLINE" });
@@ -117,13 +142,68 @@ function useSim() {
     }
   };
 
-  return { analyzing, progress, runAnalysis, rec, setRec, result, selectedFile, setSelectedFile };
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const file = new File([audioBlob], "recording.wav", { type: 'audio/wav' });
+        setSelectedFile(file);
+        runAnalysis(file);
+      };
+
+      mediaRecorderRef.current.start();
+      setRec(true);
+
+      // Auto stop after 5 seconds for analysis
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          stopRecording();
+        }
+      }, 5000);
+
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      setResult({ error: "Microphone Access Denied", cause: "SYSTEM" });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setRec(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  return {
+    analyzing, progress, runAnalysis,
+    rec, startRecording, stopRecording,
+    result, selectedFile, setSelectedFile,
+    history, fetchHistory
+  };
 }
 
 /* ════════════════  VIEWS  ════════════════ */
 
 /* ── 1. PATIENT MONITOR (Dashboard) ── */
-function MonitorView() {
+function MonitorView({ history, result }) {
+  const latestSev = result?.severity || (history.length > 0 ? history[0].severity : 3.4);
+  const latestCause = result?.cause || (history.length > 0 ? history[0].cause : "NONE");
+
+  const chartData = history.slice(0, 8).reverse().map(h => ({
+    time: h.time,
+    severity: h.severity,
+    limit: 7
+  }));
+
   return (
     <div className="grid grid-cols-12 gap-6 h-full">
       {/* Vitals & Status */}
@@ -132,55 +212,60 @@ function MonitorView() {
           <div className="space-y-4">
             {[
               { l: "Heart Rate", v: "124", u: "bpm", s: "normal" },
-              { l: "Resp Rate", v: "34", u: "/min", s: "warn" },
-              { l: "Temp", v: "36.8", u: "°C", s: "normal" },
+              { l: "Acoustic Sev", v: latestSev, u: "index", s: latestSev > 7 ? "alert" : "normal" },
+              { l: "Last Cause", v: latestCause.toUpperCase(), u: "", s: "info" },
               { l: "SPO2", v: "99", u: "%", s: "normal" }
             ].map((d, i) => (
               <div key={i} className="flex justify-between items-end border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{d.l}</span>
-                  <span className="text-2xl font-bold text-slate-900 tracking-tight">{d.v} <span className="text-xs text-gray-500 font-medium">{d.u}</span></span>
+                  <span className={`text-${d.v.length > 8 ? 'lg' : '2xl'} font-bold text-slate-900 tracking-tight`}>{d.v} <span className="text-xs text-gray-500 font-medium">{d.u}</span></span>
                 </div>
-                <Badge status={d.s}>{d.s === "warn" ? "Elevated" : "Normal"}</Badge>
+                <Badge status={d.s}>{d.s === "alert" ? "Critical" : (d.s === "info" ? "AI" : "Normal")}</Badge>
               </div>
             ))}
           </div>
         </Card>
         <Card title="Recent Alerts" icon={Bell} className="flex-1 min-h-[200px]">
-          <div className="space-y-2 overflow-y-auto pr-1 h-full max-h-[240px]">
-            {[1, 2, 3].map(i => (
+          <div className="space-y-2 overflow-y-auto pr-1 h-full max-h-[300px]">
+            {safeHistory.filter(h => h && h.severity > 6).slice(0, 5).map((h, i) => (
               <div key={i} className="flex gap-3 text-xs p-2 bg-red-50 border border-red-100 rounded">
                 <AlertOctagon size={14} className="text-red-600 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold text-red-900 block">High Distress Pattern</span>
-                  <span className="text-red-700">Duration: 45s • Severity: 8.4</span>
-                  <span className="block text-[10px] text-red-400 mt-1 font-mono">10:42:15 AM</span>
+                  <span className="font-bold text-red-900 block">System Alert: {(h.cause || "UNKNOWN").toUpperCase()}</span>
+                  <span className="text-red-700">Severity: {h.severity} • Confidence: {((h.confidence || 0) * 100).toFixed(0)}%</span>
+                  <span className="block text-[10px] text-red-400 mt-1 font-mono">{h.time}</span>
                 </div>
               </div>
             ))}
+            {safeHistory.filter(h => h && h.severity > 6).length === 0 && <div className="text-center py-10 text-gray-300 text-xs italic">No high severity alerts</div>}
           </div>
         </Card>
       </div>
 
       {/* Main Charts */}
       <div className="col-span-12 lg:col-span-9 flex flex-col gap-6">
-        <Card title="Acoustic Severity Trend (8hr)" icon={TrendingUp} className="h-1/2">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={TREND_DATA} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorSev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0284c7" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#0284c7" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-              <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <Tooltip contentStyle={{ fontSize: '12px', border: '1px solid #e5e7eb' }} />
-              <Area type="monotone" dataKey="severity" stroke="#0284c7" strokeWidth={2} fillOpacity={1} fill="url(#colorSev)" />
-              <Line type="step" dataKey="limit" stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+        <Card title="Clinical Severity Trend (Sync)" icon={TrendingUp} className="h-1/2">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorSev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0284c7" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#0284c7" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                <YAxis domain={[0, 10]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                <Tooltip contentStyle={{ fontSize: '12px', border: '1px solid #e5e7eb' }} />
+                <Area type="monotone" dataKey="severity" stroke="#0284c7" strokeWidth={3} fillOpacity={1} fill="url(#colorSev)" />
+                <Line type="step" dataKey="limit" stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-400 text-sm">Synchronizing data from cloud...</div>
+          )}
         </Card>
         <div className="grid grid-cols-2 gap-6 h-1/2">
           <Card title="Cry Classification Dist." icon={Brain} className="h-full">
@@ -207,8 +292,8 @@ function MonitorView() {
 }
 
 /* ── 2. DIAGNOSTIC ENGINE ── */
-function AnalysisView() {
-  const { analyzing, progress, runAnalysis, rec, setRec, result, selectedFile, setSelectedFile } = useSim();
+function AnalysisView({ sim }) {
+  const { analyzing, progress, runAnalysis, rec, startRecording, stopRecording, result, selectedFile, setSelectedFile } = sim;
 
   return (
     <div className="grid grid-cols-12 gap-6 h-full">
@@ -217,11 +302,11 @@ function AnalysisView() {
         <Card title="Input Controls" icon={Mic} className="flex-none">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <button
-              onClick={() => setRec(!rec)}
-              className={`h-24 rounded border flex flex-col items-center justify-center gap-2 transition-all ${rec ? "bg-red-50 border-red-200 text-red-700" : "bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300"}`}
+              onClick={() => rec ? stopRecording() : startRecording()}
+              className={`h-24 rounded border flex flex-col items-center justify-center gap-2 transition-all ${rec ? "bg-red-50 border-red-200 text-red-700 animate-pulse" : "bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300"}`}
             >
               <div className={`p-2 rounded-full ${rec ? "bg-red-200" : "bg-gray-200"}`}><Mic size={20} /></div>
-              <span className="text-xs font-bold uppercase">{rec ? "Stop Recording" : "Start Mic"}</span>
+              <span className="text-xs font-bold uppercase">{rec ? "Recording (5s)..." : "Start Mic"}</span>
             </button>
             <label className={`h-24 rounded border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${selectedFile ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300"}`}>
               <div className={`p-2 rounded-full ${selectedFile ? "bg-emerald-200" : "bg-gray-200"}`}><Upload size={20} /></div>
@@ -275,15 +360,16 @@ function AnalysisView() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded border border-gray-100 text-center">
                   <span className="block text-[10px] uppercase text-gray-400 font-bold">Severity Index</span>
-                  <span className="block text-2xl font-bold text-sky-700">{result.severity || "3.4"}</span>
+                  <span className="block text-2xl font-bold text-sky-700">{result.severity}</span>
                 </div>
                 <div className="p-3 bg-gray-50 rounded border border-gray-100 text-center">
-                  <span className="block text-[10px] uppercase text-gray-400 font-bold">Inference Time</span>
-                  <span className="block text-2xl font-bold text-slate-700">120ms</span>
+                  <span className="block text-[10px] uppercase text-gray-400 font-bold">SC Mean</span>
+                  <span className="block text-2xl font-bold text-slate-700">{result.vitals?.sc || "840"} Hz</span>
                 </div>
               </div>
               <div className="bg-sky-50 border border-sky-100 rounded p-3 text-xs text-sky-800 font-medium leading-relaxed">
-                <strong>AI Note:</strong> {result.error ? `Error: ${result.error}` : `Analysis completed. Acoustic pattern indicates ${result.cause}.`}
+                <div className="flex justify-between mb-1"><span>RMS Power:</span><span className="font-mono">{result.vitals?.rms}</span></div>
+                <div className="flex justify-between"><span>ZCR Mean:</span><span className="font-mono">{result.vitals?.zcr}</span></div>
               </div>
             </div>
           ) : (
@@ -313,51 +399,56 @@ function AnalysisView() {
 }
 
 /* ── 3. DATA LOGS ── */
-function HistoryView() {
+function HistoryView({ history = [], fetchHistory }) {
+  const safeHistory = Array.isArray(history) ? history : [];
+
   return (
     <div className="flex flex-col h-full gap-6">
-      <Card title="Patient History Logs" icon={Database} className="h-full" action={
+      <Card title="Clinical Event History" icon={Database} className="h-full" action={
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold text-gray-600 transition-colors"><Filter size={12} /> Filter</button>
+          <button onClick={fetchHistory} className="flex items-center gap-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold text-gray-600 transition-colors"><Activity size={12} /> Refresh</button>
           <button className="flex items-center gap-2 px-3 py-1 bg-sky-600 hover:bg-sky-700 rounded text-xs font-bold text-white transition-colors"><Download size={12} /> Export CSV</button>
         </div>
       }>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto h-full max-h-[600px]">
           <table className="w-full text-left text-xs text-gray-600">
-            <thead className="bg-gray-50 text-gray-400 uppercase tracking-wider font-bold border-b border-gray-200">
+            <thead className="bg-gray-50 text-gray-400 uppercase tracking-wider font-bold border-b border-gray-200 sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 w-32">Event ID</th>
                 <th className="px-4 py-3">Timestamp</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3">Cause</th>
+                <th className="px-4 py-3">Vitals (RMS/SC)</th>
                 <th className="px-4 py-3 w-24">Severity</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3 text-right">Confidence</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {LOGS.concat(LOGS).slice(0, 18).map((log, i) => (
+              {safeHistory.map((log, i) => (
                 <tr key={i} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-2 font-mono text-slate-500">{log.id}</td>
                   <td className="px-4 py-2 font-medium">{log.time}</td>
-                  <td className="px-4 py-2"><Badge status={log.type === "Alert" ? "alert" : "neutral"}>{log.type}</Badge></td>
-                  <td className="px-4 py-2 text-slate-700">{log.desc}</td>
+                  <td className="px-4 py-2"><Badge status={log.severity > 7 ? "alert" : "info"}>{log.cause}</Badge></td>
+                  <td className="px-4 py-2 text-slate-700 font-mono text-[10px]">{log.rms} / {log.sc}Hz</td>
                   <td className="px-4 py-2 font-bold flex items-center gap-2">
-                    {log.sev === "High" ? <span className="w-2 h-2 rounded-full bg-red-500" /> : <span className="w-2 h-2 rounded-full bg-emerald-500" />}
-                    {log.sev}
+                    {log.severity > 7 ? <span className="w-2 h-2 rounded-full bg-red-500" /> : <span className="w-2 h-2 rounded-full bg-emerald-500" />}
+                    {log.severity}
                   </td>
-                  <td className="px-4 py-2 text-right"><button className="text-sky-600 hover:underline">View</button></td>
+                  <td className="px-4 py-2 text-right font-bold text-sky-600">{((log.confidence || 0) * 100).toFixed(1)}%</td>
                 </tr>
               ))}
+              {safeHistory.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="text-center py-20 text-gray-400 italic">No records found. Run diagnostic engine to generate logs.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="mt-auto pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-          <span>Showing 1-18 of 2,842 records</span>
+          <span>Showing {safeHistory.length} recent sessions</span>
           <div className="flex gap-1">
             <button className="w-6 h-6 flex items-center justify-center border rounded hover:bg-gray-50 disabled:opacity-50" disabled>&lt;</button>
             <button className="w-6 h-6 flex items-center justify-center border rounded bg-sky-50 border-sky-200 text-sky-700 font-bold">1</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:bg-gray-50">2</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:bg-gray-50">3</button>
             <button className="w-6 h-6 flex items-center justify-center border rounded hover:bg-gray-50">&gt;</button>
           </div>
         </div>
@@ -436,6 +527,7 @@ function SettingsView() {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("monitor");
+  const sim = useSim();
 
   const NAV = [
     { id: "monitor", label: "Patient Monitoring", icon: Activity },
@@ -461,8 +553,10 @@ export default function App() {
           ))}
         </div>
         <div className="mt-auto p-4 bg-slate-950 border-t border-slate-800">
-          <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 mb-2"><span>SYSTEM STATUS</span><span>ONLINE</span></div>
-          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden"><div className="w-full h-full bg-emerald-500 animate-pulse" /></div>
+          <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 mb-2"><span>SYST-OK</span><span>{sim.analyzing ? "BUSY" : "IDLE"}</span></div>
+          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div className={`h-full bg-emerald-500 transition-all duration-300 ${sim.analyzing ? 'animate-pulse' : ''}`} style={{ width: sim.analyzing ? `${sim.progress}%` : '100%' }} />
+          </div>
         </div>
       </aside>
 
@@ -476,14 +570,14 @@ export default function App() {
           </div>
           <div className="flex items-center gap-4 text-gray-500 text-xs font-mono">
             <span>{new Date().toLocaleDateString()}</span>
-            <Bell size={16} className="text-gray-400 hover:text-sky-600 cursor-pointer" />
+            <Bell size={16} className={`${sim.history.some(h => h.severity > 7) ? 'text-red-500 animate-bounce' : 'text-gray-400'} cursor-pointer`} />
           </div>
         </header>
         <main className="flex-1 overflow-hidden p-6 bg-gray-100">
           <div className="h-full overflow-y-auto pr-2">
-            {activeTab === "monitor" && <MonitorView />}
-            {activeTab === "analysis" && <AnalysisView />}
-            {activeTab === "history" && <HistoryView />}
+            {activeTab === "monitor" && <MonitorView history={sim.history} result={sim.result} />}
+            {activeTab === "analysis" && <AnalysisView sim={sim} />}
+            {activeTab === "history" && <HistoryView history={sim.history} fetchHistory={sim.fetchHistory} />}
             {activeTab === "settings" && <SettingsView />}
           </div>
         </main>

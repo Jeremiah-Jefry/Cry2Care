@@ -1,9 +1,7 @@
 from flask import Flask, redirect, url_for, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from config import config
-
-db = SQLAlchemy()
+from .extensions import db
 
 def create_app(config_name='default'):
     app = Flask(__name__)
