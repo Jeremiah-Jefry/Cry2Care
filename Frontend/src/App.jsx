@@ -194,13 +194,16 @@ function useSim() {
 /* ════════════════  VIEWS  ════════════════ */
 
 /* ── 1. PATIENT MONITOR (Dashboard) ── */
-function MonitorView({ history, result }) {
-  const latestSev = result?.severity || (history.length > 0 ? history[0].severity : 3.4);
-  const latestCause = result?.cause || (history.length > 0 ? history[0].cause : "NONE");
+function MonitorView({ history = [], result }) {
+  // Safe Array Checks
+  const safeHistory = Array.isArray(history) ? history : [];
 
-  const chartData = history.slice(0, 8).reverse().map(h => ({
-    time: h.time,
-    severity: h.severity,
+  const latestSev = result?.severity || (safeHistory.length > 0 ? safeHistory[0].severity : 3.4);
+  const latestCause = result?.cause || (safeHistory.length > 0 ? safeHistory[0].cause : "NONE");
+
+  const chartData = safeHistory.slice(0, 8).reverse().map(h => ({
+    time: h.time || "--:--",
+    severity: h.severity || 0,
     limit: 7
   }));
 
